@@ -17,15 +17,17 @@ warnings.filterwarnings("ignore")
 # --- CONFIGURATION ---
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.arw', '.cr2', '.nef', '.dng', '.raf', '.orf'}
 
+
 GENRES = [
     "Landscape", "Portrait", "Street Photography", "Macro", 
-    "Bird", "Wildlife", "Architecture", "Abstract", "Night", "Astro"
+    "Bird", "Wildlife", "Architecture", "Abstract", "Night", "Astro", "Automotive"
 ]
 
 # Universal Content
 CONTENT_TAGS = [
     "dog", "cat", "tree", "mountain", "beach", "snow", 
-    "water", "sun", "cloud", "forest", "road", "sky", "sunset"
+    "water", "sun", "cloud", "forest", "road", "sky", "sunset",
+    "bridge", "boat", "train", "plane", "bicycle", "flower", "river", "lake"
 ]
 
 # Specialized Lists
@@ -46,6 +48,18 @@ INSECT_SPECIES = [
     "Butterfly", "Moth", "Bee", "Wasp", "Ant", "Fly", "Dragonfly", "Damselfly",
     "Beetle", "Ladybug", "Spider", "Grasshopper", "Cricket", "Mantis", 
     "Caterpillar", "Snail", "Slug", "Mosquito"
+]
+
+ANIMAL_SPECIES = [
+    "Squirrel", "Fox", "Deer", "Wolf", "Bear", "Rabbit", "Hedgehog",
+    "Lion", "Tiger", "Elephant", "Giraffe", "Zebra", "Monkey", "Gorilla",
+    "Leopard", "Cheetah", "Rhino", "Hippo", "Kangaroo", "Koala", "Panda",
+    "Lizard", "Snake", "Frog", "Turtle", "Horse", "Cow", "Sheep"
+]
+
+CAR_TAGS = [
+    "Sports Car", "Classic Car", "Muscle Car", "Race Car", "Supercar",
+    "Offroad", "Truck", "Motorcycle", "Convertible", "Vintage Car", "Rally Car"
 ]
 
 # --- XMP HELPER FUNCTIONS ---
@@ -142,16 +156,25 @@ def process_file(model, image_path):
         tags = list(found_genres)
         
         # 2. General Content Check
-        tags += get_top_tags(model, img, CONTENT_TAGS, top_k=2, threshold=0.22)
+        tags += get_top_tags(model, img, CONTENT_TAGS, top_k=3, threshold=0.22)
         
         # 3. Conditional Checks based on Genre
         # We check if *any* of the found genres match our criteria
         genre_str = " ".join(found_genres).lower()
         
-        if "bird" in genre_str or "wildlife" in genre_str:
-            # Check for specific birds
+        # Wildlife / Zoo Logic
+        if "wildlife" in genre_str or "bird" in genre_str:
+            # Check birds
             tags += get_top_tags(model, img, BIRD_SPECIES, top_k=1, threshold=0.21)
+            # Check animals
+            tags += get_top_tags(model, img, ANIMAL_SPECIES, top_k=1, threshold=0.21)
             
+        # Also check animals if no genre found or just 'Portrait'/'Landscape' but animal confidence is high
+        # (CLIP sometimes calls a zoo animal 'Portrait')
+        # We'll just run animal check if it's NOT architecture/street/macro to save time?
+        if not ("architecture" in genre_str or "street" in genre_str or "macro" in genre_str):
+             tags += get_top_tags(model, img, ANIMAL_SPECIES, top_k=1, threshold=0.24) # Higher threshold if blind
+
         if "macro" in genre_str or "insect" in genre_str:
              # Check for insects
             tags += get_top_tags(model, img, INSECT_SPECIES, top_k=1, threshold=0.21)
@@ -159,6 +182,10 @@ def process_file(model, image_path):
         if "street" in genre_str or "architecture" in genre_str:
             # Check deeper street tags
             tags += get_top_tags(model, img, STREET_TAGS, top_k=3, threshold=0.20)
+            
+        if "automotive" in genre_str or "street" in genre_str:
+            # Check cars
+            tags += get_top_tags(model, img, CAR_TAGS, top_k=1, threshold=0.22)
 
         # Cleanup duplicates
         return sorted(list(set(tags)))
